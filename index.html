@@ -2,14 +2,13 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>abdo crypto</title>
+  <title>إشـارات التـداول 🔔</title>
   <style>
-    body { font-family: Tahoma, Arial; background: #f0f0f0; direction: rtl; text-align: center; }
-    h1 { margin-top: 20px; }
-    table { width: 90%; margin: 20px auto; border-collapse: collapse; background: #fff; }
-    th, td { padding: 10px; border: 1px solid #ccc; }
-    th { background: #007bff; color: #fff; }
-    tr:nth-child(even) { background-color: #f9f9f9; }
+    body{font-family:tahoma,arial;background:#f0f0f0;direction:rtl;text-align:center}
+    table{width:90%;margin:20px auto;border-collapse:collapse;background:#fff}
+    th,td{padding:10px;border:1px solid #ccc}
+    th{background:#007bff;color:#fff}
+    tr:nth-child(even){background:#f9f9f9}
   </style>
 </head>
 <body>
@@ -18,27 +17,20 @@
 
   <script>
     fetch('signals_log.json')
-      .then(response => response.json())
-      .then(data => {
-        let table = "<table><tr><th>الرمز</th><th>الإشارة</th><th>التأكيد</th><th>الدعم</th><th>المقاومة</th><th>السعر الموصى به</th><th>الوقت</th></tr>";
-        data.reverse().forEach(row => {
-          table += `<tr>
-            <td>${row.Symbol}</td>
-            <td>${row.Signal}</td>
-            <td>${row.Confirmation}</td>
-            <td>${parseFloat(row.Support).toFixed(4)}</td>
-            <td>${parseFloat(row.Resistance).toFixed(4)}</td>
-            <td>${parseFloat(row["Recommended Price"]).toFixed(4)}</td>
+      .then(r=>r.json())
+      .then(data=>{
+        let html='<table><tr><th>الرمز</th><th>الإشارة</th><th>التأكيد</th><th>الدعم</th><th>المقاومة</th><th>السعر الموصى به</th><th>الوقت</th></tr>';
+        data.slice().reverse().forEach(row=>{
+          html+=`<tr>
+            <td>${row.Symbol}</td><td>${row.Signal}</td><td>${row.Confirmation}</td>
+            <td>${(+row.Support).toFixed(4)}</td><td>${(+row.Resistance).toFixed(4)}</td>
+            <td>${(+row["Recommended Price"]).toFixed(4)}</td>
             <td>${new Date(row.Time).toLocaleString("ar-EG")}</td>
           </tr>`;
         });
-        table += "</table>";
-        document.getElementById("table-container").innerHTML = table;
+        document.getElementById('table-container').innerHTML=html+'</table>';
       })
-      .catch(err => {
-        document.getElementById("table-container").innerHTML = "⚠️ فشل تحميل البيانات";
-        console.error(err);
-      });
+      .catch(()=>{document.getElementById('table-container').textContent='⚠️ فشل تحميل البيانات';});
   </script>
 </body>
 </html>
