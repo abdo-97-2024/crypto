@@ -1,0 +1,4 @@
+import pandas as pd
+
+df = pd.read_csv("signals_log.csv")
+df.to_json("signals_log.json", orient="records", date_format="iso", force_ascii=False)
