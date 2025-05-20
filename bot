@@ -1,0 +1,152 @@
+import yfinance as yf
+import pandas as pd
+import ta
+import schedule
+import time
+import os
+import logging
+from dotenv import load_dotenv
+
+# تحميل متغيرات البيئة من ملف .env
+load_dotenv()
+
+# إعداد تسجيل الأحداث
+logging.basicConfig(filename='bot.log',
+                    level=logging.INFO,
+                    format='%(asctime)s - %(message)s')
+
+# بيانات البريد (معطَّلة حالياً)
+email = os.getenv("TRADING_EMAIL")
+app_password = os.getenv("TRADING_APP_PASSWORD")
+
+def send_signal_email(symbol, signal, confirmation, support, resistance, recommended_price):
+    """تعطيل مؤقت لإرسال الإيميل"""
+    pass
+
+def save_signal(symbol, signal, confirmation, support, resistance, recommended_price):
+    df = pd.DataFrame([{
+        'Time': pd.Timestamp.now(),
+        'Symbol': symbol,
+        'Signal': signal,
+        'Confirmation': confirmation,
+        'Support': support,
+        'Resistance': resistance,
+        'Recommended Price': recommended_price
+    }])
+    df.to_csv("signals_log.csv",
+              mode='a',
+              header=not os.path.exists("signals_log.csv"),
+              index=False)
+
+def get_support_resistance(data, window=20):
+    recent = data[-window:]
+    return recent['Low'].min(), recent['High'].max()
+
+def analyze_price_action(data):
+    last = data['Close'].iloc[-1]
+    support, resistance = get_support_resistance(data)
+    support = float(support)
+    resistance = float(resistance)
+
+    signal, confirmation = None, ""
+    recommended_price = None
+
+    if last < support * 0.995:
+        signal, confirmation = "كسر دعم", "إغلاق تحت الدعم"
+        recommended_price = support * 0.99
+    elif last > resistance * 1.005:
+        signal, confirmation = "كسر مقاومة", "إغلاق فوق المقاومة"
+        recommended_price = resistance * 1.01
+    elif abs(last - support) / support < 0.005:
+        signal, confirmation = "ارتداد من الدعم", "شمعة انعكاسية"
+        recommended_price = support
+    elif abs(last - resistance) / resistance < 0.005:
+        signal, confirmation = "ارتداد من المقاومة", "شمعة انعكاسية"
+        recommended_price = resistance
+
+    return signal, confirmation, support, resistance, recommended_price
+
+def analyze_symbol(symbol):
+    try:
+        data = yf.download(
+            symbol,
+            interval="1h",
+            period="7d",
+            progress=False,
+            auto_adjust=True
+        ).dropna()
+
+        close_series = data['Close']
+        # تأكد من أن close_series هو Series (1D)
+        if isinstance(close_series, pd.DataFrame):
+            close_series = close_series.squeeze()
+
+        # حساب المؤشرات الفنية
+        data['RSI']     = ta.momentum.RSIIndicator(close_series).rsi()
+        data['EMA_7']   = ta.trend.EMAIndicator(close_series, 7).ema_indicator()
+        data['EMA_50']  = ta.trend.EMAIndicator(close_series, 50).ema_indicator()
+        data['EMA_100'] = ta.trend.EMAIndicator(close_series, 100).ema_indicator()
+        data['EMA_200'] = ta.trend.EMAIndicator(close_series, 200).ema_indicator()
+        data['SMA_50']  = ta.trend.SMAIndicator(close_series, 50).sma_indicator()
+
+        last_rsi = data['RSI'].iloc[-1]
+        last_close = close_series.iloc[-1]
+
+        # تجاهل إذا RSI بين 30 و 70 (محايد)
+        if 30 < last_rsi < 70:
+            logging.info(f"{symbol}: RSI محايد ({last_rsi:.2f}) – تجاهُل.")
+            return
+
+        signal, conf, sup, res, rec_price = analyze_price_action(data)
+        if signal:
+            save_signal(symbol, signal, conf, sup, res, rec_price)
+            # send_signal_email(symbol, signal, conf, sup, res, rec_price)  # تعطيل الإيميل حالياً
+            log_msg = (
+                f"{symbol}: إشارة → {signal} ✅\n"
+                f"الإغلاق الحالي: {last_close:.4f}\n"
+                f"الدعم: {sup:.4f}، المقاومة: {res:.4f}\n"
+                f"الشرح: {conf}\n"
+                f"السعر الموصى به: {rec_price:.4f}\n"
+                f"مؤشرات:\n"
+                f"RSI: {last_rsi:.2f}\n"
+                f"EMA 7: {data['EMA_7'].iloc[-1]:.4f}\n"
+                f"EMA 50: {data['EMA_50'].iloc[-1]:.4f}\n"
+                f"EMA 100: {data['EMA_100'].iloc[-1]:.4f}\n"
+                f"EMA 200: {data['EMA_200'].iloc[-1]:.4f}\n"
+                f"SMA 50: {data['SMA_50'].iloc[-1]:.4f}"
+            )
+            logging.info(log_msg)
+            print(log_msg)
+        else:
+            logging.info(f"{symbol}: لا إشارة حالياً ❌")
+            print(f"{symbol}: لا إشارة حالياً ❌")
+
+    except Exception as e:
+        logging.error(f"⚠️ خطأ أثناء تحليل {symbol}: {e}")
+        print(f"⚠️ خطأ أثناء تحليل {symbol}: {e}")
+
+def job():
+    symbols = [
+        "BTC-USD",   # بيتكوين
+        "ETH-USD",   # إيثيريوم
+        "BNB-USD",   # بينانس
+        "XRP-USD",   # ريبل
+        "ADA-USD",   # كاردانو
+        "HBAR-USD"   # هيدرا
+    ]
+    logging.info("🔍 بدء تحليل الرموز...")
+    print("🔍 بدء تحليل الرموز...")
+    for s in symbols:
+        analyze_symbol(s)
+
+# ——— الجدولة ———
+schedule.every().hour.at(":00").do(job)
+
+logging.info("✅ البوت بدأ وسيتم التحقق من الإشارات كل ساعة...")
+print("✅ البوت بدأ وسيتم التحقق من الإشارات كل ساعة...")
+
+job()  # تشغيل فوري للتجربة
+
+while True:
+    schedule.run_pending()
+    time.sleep(60)
